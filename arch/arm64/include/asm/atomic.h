@@ -4,6 +4,7 @@
  * Copyright (C) 1996 Russell King.
  * Copyright (C) 2002 Deep Blue Solutions Ltd.
  * Copyright (C) 2012 ARM Ltd.
+ * Copyright (C) 2014, NVIDIA CORPORATION.  All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -29,6 +30,7 @@
 #ifdef __KERNEL__
 
 #define __ARM64_IN_ATOMIC_IMPL
+#define cpu_relaxed_read_atomic(v)	ldax32((volatile int *)&(v->counter))
 
 #if defined(CONFIG_ARM64_LSE_ATOMICS) && defined(CONFIG_AS_LSE)
 #include <asm/atomic_lse.h>
