@@ -7288,7 +7288,8 @@ static int wake_cap(struct task_struct *p, int cpu, int prev_cpu)
 	return min_cap * 1024 < task_util_est(p) * capacity_margin;
 }
 
-static int select_energy_cpu_brute(struct task_struct *p, int prev_cpu)
+static int select_energy_cpu_brute(struct task_struct *p, int prev_cpu,
+				   int sync_boost)
 {
 	struct sched_domain *sd;
 	int target_cpu = prev_cpu, tmp_target, tmp_backup;
@@ -7310,7 +7311,7 @@ static int select_energy_cpu_brute(struct task_struct *p, int prev_cpu)
 
 	sd = rcu_dereference(per_cpu(sd_ea, prev_cpu));
 	/* Find a cpu with sufficient capacity */
-	tmp_target = find_best_target(p, &tmp_backup, boosted, prefer_idle);
+	tmp_target = find_best_target(p, &tmp_backup, boosted || sync_boost, prefer_idle);
 
 	if (!sd)
 		goto unlock;
@@ -11112,7 +11113,7 @@ void check_for_migration(struct rq *rq, struct task_struct *p)
 		    rq->curr->nr_cpus_allowed == 1)
 			return;
 
-		new_cpu = select_energy_cpu_brute(p, cpu);
+		new_cpu = select_energy_cpu_brute(p, cpu, 0);
 		if (capacity_orig_of(new_cpu) > capacity_orig_of(cpu)) {
 			active_balance = kick_active_balance(rq, p, new_cpu);
 			if (active_balance)
