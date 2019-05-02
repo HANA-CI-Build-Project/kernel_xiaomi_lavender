@@ -48,7 +48,7 @@
 #define MODULE_PARAM_PREFIX "adreno."
 
 static bool nopreempt;
-module_param(nopreempt, bool, 0444);
+module_param(nopreempt, bool, 0644);
 MODULE_PARM_DESC(nopreempt, "Disable GPU preemption");
 
 #define DRIVER_VERSION_MAJOR   3
@@ -65,7 +65,7 @@ static unsigned int counter_delta(struct kgsl_device *device,
 
 static struct devfreq_msm_adreno_tz_data adreno_tz_data = {
 	.bus = {
-		.max = 350,
+		.max = 1000,
 	},
 	.device_id = KGSL_DEVICE_3D0,
 };
