@@ -966,7 +966,7 @@ static void msm_pinctrl_resume(void)
 			**Comment:Logging kernel wakeup reson
 			*/
 
-			log_wakeup_reason(irq);
+			log_base_wakeup_reason(irq);
 
 			/*Add-end HMI_M6100_A01-60*/
 

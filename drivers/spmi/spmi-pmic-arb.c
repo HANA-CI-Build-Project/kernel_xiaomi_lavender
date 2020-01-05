@@ -572,7 +572,7 @@ static void periph_interrupt(struct spmi_pmic_arb *pa, u16 apid, bool show)
 			**Comment:Logging kernel wakeup reson
 			*/
 
-			log_wakeup_reason(irq);
+			log_base_wakeup_reason(irq);
 
 			/*Add-end HMI_M6100_A01-60*/
 
