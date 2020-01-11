@@ -2450,9 +2450,6 @@ long kgsl_ioctl_gpuobj_import(struct kgsl_device_private *dev_priv,
 			| KGSL_MEMFLAGS_SECURE
 			| KGSL_MEMFLAGS_FORCE_32BIT;
 
-	if (kgsl_is_compat_task())
-		param->flags |= KGSL_MEMFLAGS_FORCE_32BIT;
-
 	entry->memdesc.flags = param->flags;
 
 	if (MMU_FEATURE(mmu, KGSL_MMU_NEED_GUARD_PAGE))
@@ -2737,9 +2734,7 @@ long kgsl_ioctl_map_user_mem(struct kgsl_device_private *dev_priv,
 			| KGSL_MEMFLAGS_USE_CPU_MAP
 			| KGSL_MEMFLAGS_SECURE;
 	entry->memdesc.flags = ((uint64_t) param->flags)
-
-	if (kgsl_is_compat_task())
-		entry->memdesc.flags |= KGSL_MEMFLAGS_FORCE_32BIT;
+		| KGSL_MEMFLAGS_FORCE_32BIT;
 
 	if (!kgsl_mmu_use_cpu_map(mmu))
 		entry->memdesc.flags &= ~((uint64_t) KGSL_MEMFLAGS_USE_CPU_MAP);
@@ -3233,9 +3228,6 @@ long kgsl_ioctl_gpuobj_alloc(struct kgsl_device_private *dev_priv,
 	struct kgsl_gpuobj_alloc *param = data;
 	struct kgsl_mem_entry *entry;
 
-	if (kgsl_is_compat_task())
-		param->flags |= KGSL_MEMFLAGS_FORCE_32BIT;
-
 	entry = gpumem_alloc_entry(dev_priv, param->size, param->flags);
 
 	if (IS_ERR(entry))
@@ -3263,9 +3255,7 @@ long kgsl_ioctl_gpumem_alloc(struct kgsl_device_private *dev_priv,
 
 	/* Legacy functions doesn't support these advanced features */
 	flags &= ~((uint64_t) KGSL_MEMFLAGS_USE_CPU_MAP);
-
-	if (kgsl_is_compat_task())
-		flags |= KGSL_MEMFLAGS_FORCE_32BIT;
+	flags |= KGSL_MEMFLAGS_FORCE_32BIT;
 
 	entry = gpumem_alloc_entry(dev_priv, (uint64_t) param->size, flags);
 
@@ -3289,8 +3279,7 @@ long kgsl_ioctl_gpumem_alloc_id(struct kgsl_device_private *dev_priv,
 	struct kgsl_mem_entry *entry;
 	uint64_t flags = param->flags;
 
-	if (kgsl_is_compat_task())
-		flags |= KGSL_MEMFLAGS_FORCE_32BIT;
+	flags |= KGSL_MEMFLAGS_FORCE_32BIT;
 
 	entry = gpumem_alloc_entry(dev_priv, (uint64_t) param->size, flags);
 
