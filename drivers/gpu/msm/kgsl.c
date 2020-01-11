@@ -2437,6 +2437,7 @@ long kgsl_ioctl_gpuobj_import(struct kgsl_device_private *dev_priv,
 	struct kgsl_gpuobj_import *param = data;
 	struct kgsl_mem_entry *entry;
 	int ret, fd = -1;
+	struct kgsl_mmu *mmu = &dev_priv->device->mmu;
 
 	entry = kgsl_mem_entry_create();
 	if (entry == NULL)
@@ -2452,7 +2453,11 @@ long kgsl_ioctl_gpuobj_import(struct kgsl_device_private *dev_priv,
 	if (kgsl_is_compat_task())
 		param->flags |= KGSL_MEMFLAGS_FORCE_32BIT;
 
-	kgsl_memdesc_init(dev_priv->device, &entry->memdesc, param->flags);
+	entry->memdesc.flags = param->flags;
+
+	if (MMU_FEATURE(mmu, KGSL_MMU_NEED_GUARD_PAGE))
+		entry->memdesc.priv |= KGSL_MEMDESC_GUARD_PAGE;
+
 	if (param->type == KGSL_USER_MEM_TYPE_ADDR)
 		ret = _gpuobj_map_useraddr(dev_priv->device, private->pagetable,
 			entry, param);
@@ -2690,7 +2695,6 @@ long kgsl_ioctl_map_user_mem(struct kgsl_device_private *dev_priv,
 	struct kgsl_process_private *private = dev_priv->process_priv;
 	struct kgsl_mmu *mmu = &dev_priv->device->mmu;
 	unsigned int memtype;
-	uint64_t flags;
 
 	/*
 	 * If content protection is not enabled and secure buffer
@@ -2727,16 +2731,24 @@ long kgsl_ioctl_map_user_mem(struct kgsl_device_private *dev_priv,
 	 * Note: CACHEMODE is ignored for this call. Caching should be
 	 * determined by type of allocation being mapped.
 	 */
-	flags = param->flags & (KGSL_MEMFLAGS_GPUREADONLY
-				| KGSL_MEMTYPE_MASK
-				| KGSL_MEMALIGN_MASK
-				| KGSL_MEMFLAGS_USE_CPU_MAP
-				| KGSL_MEMFLAGS_SECURE);
+	param->flags &= KGSL_MEMFLAGS_GPUREADONLY
+			| KGSL_MEMTYPE_MASK
+			| KGSL_MEMALIGN_MASK
+			| KGSL_MEMFLAGS_USE_CPU_MAP
+			| KGSL_MEMFLAGS_SECURE;
+	entry->memdesc.flags = ((uint64_t) param->flags)
 
 	if (kgsl_is_compat_task())
-		flags |= KGSL_MEMFLAGS_FORCE_32BIT;
+		entry->memdesc.flags |= KGSL_MEMFLAGS_FORCE_32BIT;
 
-	kgsl_memdesc_init(dev_priv->device, &entry->memdesc, flags);
+	if (!kgsl_mmu_use_cpu_map(mmu))
+		entry->memdesc.flags &= ~((uint64_t) KGSL_MEMFLAGS_USE_CPU_MAP);
+
+	if (MMU_FEATURE(mmu, KGSL_MMU_NEED_GUARD_PAGE))
+		entry->memdesc.priv |= KGSL_MEMDESC_GUARD_PAGE;
+
+	if (param->flags & KGSL_MEMFLAGS_SECURE)
+		entry->memdesc.priv |= KGSL_MEMDESC_SECURE;
 
 	switch (memtype) {
 	case KGSL_MEM_ENTRY_USER:
@@ -3139,6 +3151,10 @@ static struct kgsl_mem_entry *gpumem_alloc_entry(
 		return ERR_PTR(-EOPNOTSUPP);
 	}
 
+	/* Secure memory disables advanced addressing modes */
+	if (flags & KGSL_MEMFLAGS_SECURE)
+		flags &= ~((uint64_t) KGSL_MEMFLAGS_USE_CPU_MAP);
+
 	/* Cap the alignment bits to the highest number we can handle */
 	align = MEMFLAGS(flags, KGSL_MEMALIGN_MASK, KGSL_MEMALIGN_SHIFT);
 	if (align >= ilog2(KGSL_MAX_ALIGN)) {
@@ -3159,6 +3175,12 @@ static struct kgsl_mem_entry *gpumem_alloc_entry(
 	entry = kgsl_mem_entry_create();
 	if (entry == NULL)
 		return ERR_PTR(-ENOMEM);
+
+	if (MMU_FEATURE(&dev_priv->device->mmu, KGSL_MMU_NEED_GUARD_PAGE))
+		entry->memdesc.priv |= KGSL_MEMDESC_GUARD_PAGE;
+
+	if (flags & KGSL_MEMFLAGS_SECURE)
+		entry->memdesc.priv |= KGSL_MEMDESC_SECURE;
 
 	ret = kgsl_allocate_user(dev_priv->device, &entry->memdesc,
 		size, flags);
@@ -3344,7 +3366,6 @@ long kgsl_ioctl_sparse_phys_alloc(struct kgsl_device_private *dev_priv,
 	struct kgsl_device *device = dev_priv->device;
 	struct kgsl_sparse_phys_alloc *param = data;
 	struct kgsl_mem_entry *entry;
-	uint64_t flags;
 	int ret;
 	int id;
 
@@ -3380,12 +3401,11 @@ long kgsl_ioctl_sparse_phys_alloc(struct kgsl_device_private *dev_priv,
 	entry->id = id;
 	entry->priv = process;
 
-	flags = KGSL_MEMFLAGS_SPARSE_PHYS |
-		((ilog2(param->pagesize) << KGSL_MEMALIGN_SHIFT) &
-			KGSL_MEMALIGN_MASK);
+	entry->memdesc.flags = KGSL_MEMFLAGS_SPARSE_PHYS;
+	kgsl_memdesc_set_align(&entry->memdesc, ilog2(param->pagesize));
 
 	ret = kgsl_allocate_user(dev_priv->device, &entry->memdesc,
-			param->size, flags);
+			param->size, entry->memdesc.flags);
 	if (ret)
 		goto err_remove_idr;
 
@@ -3482,8 +3502,7 @@ long kgsl_ioctl_sparse_virt_alloc(struct kgsl_device_private *dev_priv,
 	if (entry == NULL)
 		return -ENOMEM;
 
-	kgsl_memdesc_init(dev_priv->device, &entry->memdesc,
-			KGSL_MEMFLAGS_SPARSE_VIRT);
+	entry->memdesc.flags = KGSL_MEMFLAGS_SPARSE_VIRT;
 	entry->memdesc.size = param->size;
 	entry->memdesc.cur_bindings = 0;
 	kgsl_memdesc_set_align(&entry->memdesc, ilog2(param->pagesize));
