@@ -650,10 +650,7 @@ static int smb2_usb_port_get_prop(struct power_supply *psy,
 
 	switch (psp) {
 	case POWER_SUPPLY_PROP_TYPE:
-		if ((chg->real_charger_type == POWER_SUPPLY_TYPE_USB_HVDCP) || (chg->real_charger_type == POWER_SUPPLY_TYPE_USB_HVDCP_3))
-			val->intval = chg->real_charger_type;
-		else
-			val->intval = POWER_SUPPLY_TYPE_USB_PD;
+		val->intval = POWER_SUPPLY_TYPE_USB;
 		break;
 	case POWER_SUPPLY_PROP_ONLINE:
 		rc = smblib_get_prop_usb_online(chg, val);
@@ -1646,19 +1643,19 @@ static int smb2_init_hw(struct smb2 *chip)
 
 	/* Operate the QC2.0 in 5V/9V mode i.e. Disable 12V */
 	rc = smblib_masked_write(chg, HVDCP_PULSE_COUNT_MAX_REG,
-			PULSE_COUNT_QC2P0_12V | PULSE_COUNT_QC2P0_9V,
-			PULSE_COUNT_QC2P0_9V);
+						PULSE_COUNT_QC2P0_12V | PULSE_COUNT_QC2P0_9V,
+						PULSE_COUNT_QC2P0_9V);
 	if (rc < 0) {
 		dev_err(chg->dev,
-				"Couldn't configure QC2.0 to 9V rc=%d\n", rc);
+			"Couldn't configure QC2.0 to 9V rc=%d\n", rc);
 		return rc;
 	}
-	/* Operate the QC3.0 to limit vbus to 8.0v*/
+	/* Operate the QC3.0 to limit vbus to 6.6v*/
 	rc = smblib_masked_write(chg, HVDCP_PULSE_COUNT_MAX_REG,
-			PULSE_COUNT_QC3P0_MASK, 0xf);
+					PULSE_COUNT_QC3P0_MASK, 0x8);
 	if (rc < 0) {
 		dev_err(chg->dev,
-				"Couldn't configure QC3.0 to 7.6V rc=%d\n", rc);
+			"Couldn't configure QC3.0 to 6.6V rc=%d\n", rc);
 		return rc;
 	}
 	/*
